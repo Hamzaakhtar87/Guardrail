@@ -1,0 +1,27 @@
+[package]
+name = "guardrail"
+version = "0.1.0"
+edition = "2021"
+description = "Deterministic WASM execution sandbox for autonomous AI code enforcement"
+
+[dependencies]
+# ── WASM Runtime ──────────────────────────────────────────────────────────────
+# Wasmtime: Bytecode Alliance's production WASM runtime.
+# Cranelift feature enables AOT compilation (default, but explicit for clarity).
+wasmtime = { version = "43.0", features = ["cranelift"] }
+
+# WASI Preview 1 host implementation — provides the `wasi_snapshot_preview1`
+# imports that compiled Rust/C WASM modules expect (_start, fd_write, etc).
+wasmtime-wasi = "43.0"
+
+# ── Serialization ─────────────────────────────────────────────────────────────
+# Structured JSON feedback loop output for the LLM swarm.
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+# Ergonomic error handling with context propagation.
+anyhow = "1.0"
+
+# Temporary directories for compilation artifacts (source → .wasm).
+tempfile = "3"
