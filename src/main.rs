@@ -2,38 +2,44 @@
 // main.rs — Guardrail CLI entry point and demo harness
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //
-// This is the top-level orchestrator for the Guardrail execution sandbox.
-// It demonstrates the full pipeline:
+// This is the top-level orchestrator for the Guardrail execution sandbox
+// and the mHTTP data ingestion engine. It demonstrates the full pipeline:
 //
 //   1. LLM source code → rustc → .wasm    (compiler.rs)
 //   2. .wasm → Wasmtime sandbox             (sandbox.rs)
 //   3. Result → Structured JSON             (feedback.rs)
+//   4. URL → raw HTML → compressed text     (mhttp.rs)
 //
-// Three test vectors are exercised:
-//   ✓ SUCCESS:  A simple println program → captured stdout
-//   ✗ TIMEOUT:  An infinite loop → killed after 5 seconds
-//   ✗ OOM:      Excessive allocation → denied by StoreLimits
-//   ✗ COMPILE:  Invalid syntax → rustc error feedback
+// Test vectors exercised:
+//   ✓ WASM SANDBOX: Hostile reconnaissance, compile errors, timeout, OOM
+//   ✓ mHTTP:        Wikipedia article fetch + DOM compression audit
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 mod compiler;
 mod feedback;
+mod mhttp;
 mod sandbox;
 
 use feedback::GuardrailResult;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     println!("╔══════════════════════════════════════════════════════════════╗");
-    println!("║           GUARDRAIL — WASM Execution Sandbox                ║");
+    println!("║           GUARDRAIL — Execution Sandbox + mHTTP Engine      ║");
     println!("║     Deterministic Enforcement Layer for AI Swarm            ║");
     println!("╚══════════════════════════════════════════════════════════════╝");
     println!();
 
-    // ── THE ASSAULT VECTOR ───────────────────────────────────────────────
-    // Testing the WASI zero-trust boundaries (Env Vars, File System, Network)
-    run_test(
-        "HOSTILE RECONNAISSANCE — Bypassing WASI Zero-Trust",
-        r#"
+    // ── WASM Sandbox Tests ───────────────────────────────────────────────
+    // These run on a dedicated blocking thread because Wasmtime's synchronous
+    // WASI implementation uses internal block_on() calls that conflict with
+    // tokio's async runtime. spawn_blocking moves them off the async executor.
+    tokio::task::spawn_blocking(|| {
+        // ── THE ASSAULT VECTOR ───────────────────────────────────────────
+        // Testing the WASI zero-trust boundaries (Env Vars, File System, Network)
+        run_test(
+            "HOSTILE RECONNAISSANCE — Bypassing WASI Zero-Trust",
+            r#"
 use std::env;
 use std::fs::File;
 use std::io::Read;
@@ -72,28 +78,24 @@ fn main() {
     }
 }
 "#,
-    );
+        );
 
-    // ── Test Vector 2: Compilation Failure ───────────────────────────────
-    // Invalid Rust syntax — rustc will reject this with diagnostics that
-    // get fed back to the LLM in the error JSON.
-    run_test(
-        "COMPILE ERROR — Invalid syntax",
-        r#"
+        // ── Test Vector 2: Compilation Failure ───────────────────────────
+        run_test(
+            "COMPILE ERROR — Invalid syntax",
+            r#"
 fn main() {
     let x = ;  // syntax error: expected expression
     println!("{}", x);
 }
 "#,
-    );
+        );
 
-    // ── Test Vector 3: Infinite Loop (Timeout) ───────────────────────────
-    // This program enters an infinite loop. The epoch watchdog thread will
-    // fire after 5 seconds and kill the execution with an EpochInterruption.
-    // NOTE: This test takes ~5 seconds to complete by design.
-    run_test(
-        "TIMEOUT — Infinite loop (5s deadline)",
-        r#"
+        // ── Test Vector 3: Infinite Loop (Timeout) ───────────────────────
+        // NOTE: This test takes ~5 seconds to complete by design.
+        run_test(
+            "TIMEOUT — Infinite loop (5s deadline)",
+            r#"
 fn main() {
     println!("Starting infinite loop...");
     loop {
@@ -101,30 +103,53 @@ fn main() {
     }
 }
 "#,
-    );
+        );
 
-    // ── Test Vector 4: Memory Exceeded ───────────────────────────────────
-    // Attempts to allocate well beyond the 50MB limit. StoreLimits will deny
-    // the memory.grow operation, causing the allocation to fail.
-    run_test(
-        "MEMORY EXCEEDED — Allocation beyond 50MB",
-        r#"
+        // ── Test Vector 4: Memory Exceeded ───────────────────────────────
+        run_test(
+            "MEMORY EXCEEDED — Allocation beyond 50MB",
+            r#"
 fn main() {
-    // Attempt to allocate ~100MB — far beyond the 50MB sandbox limit.
     let mut data: Vec<u8> = Vec::new();
     for _ in 0..100 {
-        // Each push of 1MB. StoreLimits will deny growth past 50MB.
         let chunk = vec![42u8; 1024 * 1024];
         data.extend_from_slice(&chunk);
     }
     println!("Allocated {} bytes", data.len());
 }
 "#,
-    );
+        );
+    }).await.expect("WASM sandbox tests panicked");
+
+    // ── mHTTP ASSAULT VECTORS ───────────────────────────────────────────────
+    println!("╔══════════════════════════════════════════════════════════════╗");
+    println!("║           mHTTP — HOSTILE RECONNAISSANCE TESTS               ║");
+    println!("╚══════════════════════════════════════════════════════════════╝");
+    println!();
+
+    // Attack 1: The Blackhole (Testing the 15s timeout constraint)
+    // 10.255.255.1 is non-routable and will force a connection timeout.
+    run_mhttp_test(
+        "ATTACK 1: Network Timeout (Blackhole IP)",
+        "http://10.255.255.1",
+    ).await;
+
+    // Attack 2: The Payload Bomb (Testing the 10MB memory guard)
+    // Attempting to ingest a 100MB test file to see if the engine catches it before downloading.
+    run_mhttp_test(
+        "ATTACK 2: Payload Bomb (100MB Zip File)",
+        "http://ipv4.download.thinkbroadband.com/100MB.zip",
+    ).await;
+
+    // Attack 3: The Dead End (Testing graceful HTTP error handling)
+    run_mhttp_test(
+        "ATTACK 3: HTTP 404 (Not Found)",
+        "https://httpstat.us/404",
+    ).await;
 
     println!();
     println!("════════════════════════════════════════════════════════════════");
-    println!("  All test vectors complete. Guardrail operational.");
+    println!("  All test vectors complete. Guardrail + mHTTP operational.");
     println!("════════════════════════════════════════════════════════════════");
 }
 
@@ -171,6 +196,72 @@ fn print_result(result: &GuardrailResult, elapsed: std::time::Duration) {
     for line in result.to_json().lines() {
         println!("    {}", line);
     }
+    println!("  ─────────────────────────────────────────────────────────");
+    println!();
+}
+
+// ── mHTTP Test Orchestrator ─────────────────────────────────────────────────
+
+/// Run a single mHTTP test vector: fetch a URL, strip the DOM, and report
+/// the compression ratio (raw HTML bytes vs compressed text bytes).
+async fn run_mhttp_test(label: &str, url: &str) {
+    println!("┌─────────────────────────────────────────────────────────────┐");
+    println!("│ mHTTP: {:<52}│", label);
+    println!("└─────────────────────────────────────────────────────────────┘");
+
+    let start = std::time::Instant::now();
+
+    // ── Phase 1: Fetch raw payload ───────────────────────────────────────
+    let (raw_html, raw_size) = match mhttp::fetch_raw_payload(url).await {
+        Ok(result) => result,
+        Err(e) => {
+            println!("  ❌ FETCH FAILED: {}", e);
+            println!("  ⏱  Elapsed: {:.2}s", start.elapsed().as_secs_f64());
+            println!();
+            return;
+        }
+    };
+
+    // ── Phase 2: Compress ────────────────────────────────────────────────
+    let (compressed_text, compressed_size) = match mhttp::compress_html(&raw_html) {
+        Ok(result) => result,
+        Err(e) => {
+            println!("  ❌ COMPRESSION FAILED: {}", e);
+            println!("  ⏱  Elapsed: {:.2}s", start.elapsed().as_secs_f64());
+            println!();
+            return;
+        }
+    };
+
+    let elapsed = start.elapsed();
+
+    // ── Phase 3: Token efficiency audit ──────────────────────────────────
+    let reduction_pct = if raw_size > 0 {
+        ((1.0 - (compressed_size as f64 / raw_size as f64)) * 100.0) as u32
+    } else {
+        0
+    };
+
+    // Estimate token counts (rough heuristic: ~4 chars per token for English)
+    let raw_tokens_est = raw_size / 4;
+    let compressed_tokens_est = compressed_size / 4;
+
+    println!("  ⏱  Elapsed: {:.2}s", elapsed.as_secs_f64());
+    println!("  📊 Compression Audit:");
+    println!("  ─────────────────────────────────────────────────────────");
+    println!("    Source URL:          {}", url);
+    println!("    Raw HTML:            {} bytes (~{} tokens)", raw_size, raw_tokens_est);
+    println!("    Compressed Text:     {} bytes (~{} tokens)", compressed_size, compressed_tokens_est);
+    println!("    Reduction:           {}%", reduction_pct);
+    println!("    Tokens Saved:        ~{}", raw_tokens_est.saturating_sub(compressed_tokens_est));
+    println!("  ─────────────────────────────────────────────────────────");
+    println!("  📋 First 500 chars of compressed output:");
+    println!("  ─────────────────────────────────────────────────────────");
+    let preview: String = compressed_text.chars().take(500).collect();
+    for line in preview.lines() {
+        println!("    {}", line);
+    }
+    println!("    ...");
     println!("  ─────────────────────────────────────────────────────────");
     println!();
 }
