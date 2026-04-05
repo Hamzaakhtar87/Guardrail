@@ -28,7 +28,7 @@ tempfile = "3"
 
 # ── mHTTP: Host-Side Data Ingestion Engine ────────────────────────────────────
 # Async HTTP client with TLS for fetching raw web payloads.
-reqwest = { version = "0.12", features = ["rustls-tls"], default-features = false }
+reqwest = { version = "0.12", features = ["rustls-tls", "json"], default-features = false }
 
 # Async runtime — required by reqwest. Only enable the features we need.
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

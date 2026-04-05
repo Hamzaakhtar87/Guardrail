@@ -9,15 +9,18 @@
 //   2. .wasm → Wasmtime sandbox             (sandbox.rs)
 //   3. Result → Structured JSON             (feedback.rs)
 //   4. URL → raw HTML → compressed text     (mhttp.rs)
+//   5. Task/Prompt → LLM loop → Working API (router.rs)
 //
 // Test vectors exercised:
 //   ✓ WASM SANDBOX: Hostile reconnaissance, compile errors, timeout, OOM
 //   ✓ mHTTP:        Wikipedia article fetch + DOM compression audit
+//   ✓ ROUTER:       Autonomous code generation & error remediation
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 mod compiler;
 mod feedback;
 mod mhttp;
+mod router;
 mod sandbox;
 
 use feedback::GuardrailResult;
@@ -147,9 +150,38 @@ fn main() {
         "https://httpstat.us/404",
     ).await;
 
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // PHASE 3: Swarm Router — Autonomous AI Coding Loop
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    println!("╔══════════════════════════════════════════════════════════════╗");
+    println!("║           ROUTER — Autonomous Coding Loop Test               ║");
+    println!("╚══════════════════════════════════════════════════════════════╝");
+    println!();
+    println!("  Starting autonomous loop. Target: IMPOSSIBLE (Kobayashi Maru).");
+
+    let task = "Write a Rust function that allocates an array of 100 megabytes in memory. \
+                Do not use any loops, just allocate 100MB directly. \
+                Print 'Allocation successful' when done.";
+
+    // Allow up to 5 iterations for the LLM to get it right.
+    match router::autonomous_coding_loop(task, 5).await {
+        Ok((_code, output)) => {
+            println!("┌─────────────────────────────────────────────────────────────┐");
+            println!("│ ROUTER SUCCESS: Final execution generated valid output      │");
+            println!("└─────────────────────────────────────────────────────────────┘");
+            println!("  {}", output.trim());
+        }
+        Err(e) => {
+            println!("┌─────────────────────────────────────────────────────────────┐");
+            println!("│ ROUTER FAILURE: Autonomous loop exhausted or failed         │");
+            println!("└─────────────────────────────────────────────────────────────┘");
+            println!("  Error: {}", e);
+        }
+    }
+
     println!();
     println!("════════════════════════════════════════════════════════════════");
-    println!("  All test vectors complete. Guardrail + mHTTP operational.");
+    println!("  All test vectors complete. Guardrail + mHTTP + Swarm operational.");
     println!("════════════════════════════════════════════════════════════════");
 }
 
