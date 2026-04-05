@@ -10,11 +10,13 @@
 //   3. Result → Structured JSON             (feedback.rs)
 //   4. URL → raw HTML → compressed text     (mhttp.rs)
 //   5. Task/Prompt → LLM loop → Working API (router.rs)
+//   6. Web3 Dev Eval → mHTTP + LLM          (scout.rs)
 //
 // Test vectors exercised:
 //   ✓ WASM SANDBOX: Hostile reconnaissance, compile errors, timeout, OOM
 //   ✓ mHTTP:        Wikipedia article fetch + DOM compression audit
 //   ✓ ROUTER:       Autonomous code generation & error remediation
+//   ✓ SCOUT:        Automated Web3/Rust developer technical evaluation
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 mod compiler;
@@ -22,6 +24,7 @@ mod feedback;
 mod mhttp;
 mod router;
 mod sandbox;
+mod scout;
 
 use feedback::GuardrailResult;
 
@@ -174,6 +177,63 @@ fn main() {
         Err(e) => {
             println!("┌─────────────────────────────────────────────────────────────┐");
             println!("│ ROUTER FAILURE: Autonomous loop exhausted or failed         │");
+            println!("└─────────────────────────────────────────────────────────────┘");
+            println!("  Error: {}", e);
+        }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // PHASE 4: Scout Agent — Web3 Developer Evaluation
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    println!();
+    println!("╔══════════════════════════════════════════════════════════════╗");
+    println!("║           SCOUT — Autonomous Web3 Developer Evaluation       ║");
+    println!("╚══════════════════════════════════════════════════════════════╝");
+    println!();
+    
+    // Evaluate the official Rust repository README as a known target
+    let target = "https://github.com/rust-lang/rust/blob/master/README.md";
+    
+    match scout::evaluate_candidate(target).await {
+        Ok(assessment) => {
+            println!("┌─────────────────────────────────────────────────────────────┐");
+            println!("│ SCOUT SUCCESS: Target Evaluated and Formatted               │");
+            println!("└─────────────────────────────────────────────────────────────┘");
+            println!("  [SCORE]: {}/10", assessment.developer_score);
+            println!("  [RATIONALE]: {}", assessment.summary_rationale);
+            println!("  [STRENGTHS]:");
+            for strength in assessment.technical_strengths {
+                println!("    - {}", strength);
+            }
+        }
+        Err(e) => {
+            println!("┌─────────────────────────────────────────────────────────────┐");
+            println!("│ SCOUT FAILURE: Evaluation Failed                            │");
+            println!("└─────────────────────────────────────────────────────────────┘");
+            println!("  Error: {}", e);
+        }
+    }
+
+    // Evaluate an adversarial "Garbage" target (Wikipedia - Banana)
+    println!();
+    println!("  [SCOUT] Initiating adversarial evaluation vector...");
+    let adversarial_target = "https://en.wikipedia.org/wiki/Banana";
+
+    match scout::evaluate_candidate(adversarial_target).await {
+        Ok(assessment) => {
+            println!("┌─────────────────────────────────────────────────────────────┐");
+            println!("│ SCOUT ADVERSARIAL SUCCESS: Handled Irrelevant Garbage       │");
+            println!("└─────────────────────────────────────────────────────────────┘");
+            println!("  [SCORE]: {}/10", assessment.developer_score);
+            println!("  [RATIONALE]: {}", assessment.summary_rationale);
+            println!("  [STRENGTHS]:");
+            for strength in assessment.technical_strengths {
+                println!("    - {}", strength);
+            }
+        }
+        Err(e) => {
+            println!("┌─────────────────────────────────────────────────────────────┐");
+            println!("│ SCOUT ADVERSARIAL FAILURE: Parser broke on garbage          │");
             println!("└─────────────────────────────────────────────────────────────┘");
             println!("  Error: {}", e);
         }
