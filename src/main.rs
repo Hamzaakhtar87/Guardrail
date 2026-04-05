@@ -25,6 +25,7 @@ mod mhttp;
 mod router;
 mod sandbox;
 mod scout;
+mod swarm;
 
 use feedback::GuardrailResult;
 
@@ -237,6 +238,43 @@ fn main() {
             println!("└─────────────────────────────────────────────────────────────┘");
             println!("  Error: {}", e);
         }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // PHASE 5: Swarm Parallelization
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    println!();
+    println!("╔══════════════════════════════════════════════════════════════╗");
+    println!("║           SWARM — Concurrent Cohort Evaluation               ║");
+    println!("╚══════════════════════════════════════════════════════════════╝");
+    println!();
+
+    let cohort = vec![
+        "https://github.com/rust-lang/rust/blob/master/README.md",
+        "http://10.255.255.1",
+        "http://ipv4.download.thinkbroadband.com/100MB.zip",
+        "https://httpstat.us/404",
+    ];
+
+    let results = swarm::evaluate_cohort(cohort).await;
+
+    println!();
+    println!("┌─────────────────────────────────────────────────────────────┐");
+    println!("│ SWARM BATCH COMPLETE: Processed {} targets concurrently      │", results.len());
+    println!("└─────────────────────────────────────────────────────────────┘");
+    
+    for (url, res) in results {
+        println!("  TARGET: {}", url);
+        match res {
+            Ok(eval) => {
+                println!("    [SCORE]: {}/10", eval.developer_score);
+                println!("    [RATIONALE]: {}", eval.summary_rationale);
+            }
+            Err(e) => {
+                println!("    [ERROR]: {}", e);
+            }
+        }
+        println!("  ─────────────────────────────────────────────────────────");
     }
 
     println!();
