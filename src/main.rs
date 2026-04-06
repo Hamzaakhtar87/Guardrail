@@ -9,23 +9,27 @@
 //   2. .wasm → Wasmtime sandbox             (sandbox.rs)
 //   3. Result → Structured JSON             (feedback.rs)
 //   4. URL → raw HTML → compressed text     (mhttp.rs)
-//   5. Task/Prompt → LLM loop → Working API (router.rs)
+//   5. Task/Prompt → MoA coding engine   (syndicate.rs)
 //   6. Web3 Dev Eval → mHTTP + LLM          (scout.rs)
+//   7. Mixture of Agents coding engine       (syndicate.rs)
+//   8. Concurrent cohort evaluation          (swarm.rs)
 //
 // Test vectors exercised:
 //   ✓ WASM SANDBOX: Hostile reconnaissance, compile errors, timeout, OOM
 //   ✓ mHTTP:        Wikipedia article fetch + DOM compression audit
-//   ✓ ROUTER:       Autonomous code generation & error remediation
+//   ✓ SYNDICATE:    Autonomous MoA code generation & error remediation
 //   ✓ SCOUT:        Automated Web3/Rust developer technical evaluation
+//   ✓ SYNDICATE:    Mixture of Agents + Deterministic Output Verification
+//   ✓ SWARM:        Concurrent evaluation of cohort identities
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 mod compiler;
 mod feedback;
 mod mhttp;
-mod router;
 mod sandbox;
 mod scout;
 mod swarm;
+mod syndicate;
 
 use feedback::GuardrailResult;
 
@@ -155,29 +159,35 @@ fn main() {
     ).await;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // PHASE 3: Swarm Router — Autonomous AI Coding Loop
+    // PHASE 3: The 10x Coding Syndicate — Mixture of Agents
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     println!("╔══════════════════════════════════════════════════════════════╗");
-    println!("║           ROUTER — Autonomous Coding Loop Test               ║");
+    println!("║     SYNDICATE — 10x Coding Engine (Mixture of Agents)       ║");
     println!("╚══════════════════════════════════════════════════════════════╝");
     println!();
-    println!("  Starting autonomous loop. Target: IMPOSSIBLE (Kobayashi Maru).");
+    println!("  Architect → Coder → Critic → Guardrail Sandbox → Output Verification");
+    println!("  Language: Rust | Task: SHA-256 from scratch");
+    println!();
 
-    let task = "Write a Rust function that allocates an array of 100 megabytes in memory. \
-                Do not use any loops, just allocate 100MB directly. \
-                Print 'Allocation successful' when done.";
+    let syndicate_task = "Implement a fully functional SHA-256 hashing algorithm from scratch \
+                          in pure Rust. Do NOT use any external crates. Implement all the \
+                          constants (K, H), message schedule, compression function, and \
+                          padding yourself. Hash the ASCII string \"hello world\" and print \
+                          the resulting 64-character lowercase hexadecimal digest. The correct \
+                          output is: b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9";
 
-    // Allow up to 5 iterations for the LLM to get it right.
-    match router::autonomous_coding_loop(task, 5).await {
-        Ok((_code, output)) => {
+    let expected_hash = "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9";
+
+    match syndicate::syndicate_coding_loop(syndicate_task, "rust", Some(expected_hash)).await {
+        Ok(output) => {
             println!("┌─────────────────────────────────────────────────────────────┐");
-            println!("│ ROUTER SUCCESS: Final execution generated valid output      │");
+            println!("│ SYNDICATE SUCCESS: SHA-256 verified by output comparison    │");
             println!("└─────────────────────────────────────────────────────────────┘");
-            println!("  {}", output.trim());
+            println!("  Output: {}", output.trim());
         }
         Err(e) => {
             println!("┌─────────────────────────────────────────────────────────────┐");
-            println!("│ ROUTER FAILURE: Autonomous loop exhausted or failed         │");
+            println!("│ SYNDICATE FAILURE: MoA pipeline exhausted                   │");
             println!("└─────────────────────────────────────────────────────────────┘");
             println!("  Error: {}", e);
         }
