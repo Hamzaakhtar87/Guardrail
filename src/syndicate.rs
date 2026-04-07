@@ -93,7 +93,7 @@ pub async fn syndicate_coding_loop(
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     println!("  [SYNDICATE] Agent 2/3: THE CODER — Implementing multi-file project...");
 
-    let coder_prompt = build_coder_prompt(language, &architecture_plan, None, None);
+    let coder_prompt = build_coder_prompt(language, &architecture_plan, None, None, None);
     let coder_response = prompt_llm(&client, &coder_prompt).await?;
     let initial_files = parse_multi_file_output(&coder_response);
 
@@ -243,9 +243,22 @@ async fn remediate(
 ) -> Result<HashMap<String, String>, String> {
     println!("  [SYNDICATE] Initiating remediation: Coder → Critic with error...");
 
+    // Phase 9: Delta Remediation
+    let broken_files = extract_error_files(error_message);
+    if !broken_files.is_empty() {
+        println!("  [SYNDICATE] Delta Remediation: Implicating specific files: {:?}", broken_files);
+    } else {
+        println!("  [SYNDICATE] No specific files parsed from error. Falling back to full rewrite.");
+    }
+
     let current_output = format_files_for_prompt(current_files);
-    let remediation_prompt =
-        build_coder_prompt(language, architecture_plan, Some(&current_output), Some(error_message));
+    let remediation_prompt = build_coder_prompt(
+        language,
+        architecture_plan,
+        Some(&current_output),
+        Some(error_message),
+        (!broken_files.is_empty()).then(|| broken_files.as_slice()),
+    );
 
     let remediated_raw = prompt_llm(client, &remediation_prompt).await?;
     let remediated_files = parse_multi_file_output(&remediated_raw);
@@ -260,14 +273,20 @@ async fn remediate(
     let critic_response = prompt_llm(client, &critic_prompt).await?;
     let critic_files = parse_multi_file_output(&critic_response);
 
-    let final_files = if critic_files.is_empty() {
+    let partial_files = if critic_files.is_empty() {
         remediated_files
     } else {
         critic_files
     };
 
+    // Phase 9: Merge Delta
+    let mut final_files = current_files.clone();
+    for (path, content) in partial_files {
+        final_files.insert(path, content);
+    }
+
     println!(
-        "  [SYNDICATE] Remediation complete — {} file(s) delivered.",
+        "  [SYNDICATE] Remediation complete — {} file(s) updated and merged.",
         final_files.len()
     );
 
@@ -385,6 +404,7 @@ fn build_coder_prompt(
     architecture_plan: &str,
     previous_output: Option<&str>,
     error_message: Option<&str>,
+    broken_files: Option<&[String]>,
 ) -> String {
     let file_format_instructions = format!(
         "OUTPUT FORMAT:\n\
@@ -406,6 +426,18 @@ fn build_coder_prompt(
         language.to_lowercase()
     );
 
+    let delta_instructions = if let Some(files) = broken_files {
+        format!(
+            "DELTA REMEDIATION:\n\
+             ONLY rewrite the following files: {:?}.\n\
+             DO NOT output [FILE: ...] blocks for files that are not in this list.\n\
+             Assume the other files are perfect.\n\n",
+            files
+        )
+    } else {
+        String::new()
+    };
+
     match (previous_output, error_message) {
         (Some(prev), Some(error)) => format!(
             "You are THE CODER — an elite {} implementation engineer.\n\n\
@@ -424,9 +456,10 @@ fn build_coder_prompt(
             You MUST map that error to the correct [FILE: ...] block.\n\
             Do NOT put imports or fixes in src/main.rs if the error explicitly occurred in src/handlers.rs.\n\
             Check your file boundaries.\n\n\
-            Fix ALL reported errors and return the COMPLETE corrected project.\n\n\
+            {}\
+            Fix ALL reported errors.\n\n\
             {}\n",
-            language, prev, error, architecture_plan, file_format_instructions
+            language, prev, error, architecture_plan, delta_instructions, file_format_instructions
         ),
         _ => format!(
             "You are THE CODER — an elite {} implementation engineer. You write flawless, \
@@ -621,4 +654,22 @@ fn infer_fence_language(path: &str) -> &str {
     } else {
         ""
     }
+}
+
+// ── Internal: Delta Remediation ──────────────────────────────────────────────
+
+/// Phase 9: Parse error output for `--> src/handlers.rs` to extract implicated files.
+fn extract_error_files(error_log: &str) -> Vec<String> {
+    let mut files = Vec::new();
+    for line in error_log.lines() {
+        if let Some(idx) = line.find("--> ") {
+            let path_part = &line[idx + 4..];
+            // Path ends at the first colon (e.g. src/handlers.rs:3:32)
+            let path = path_part.split(':').next().unwrap_or("").trim().to_string();
+            if !path.is_empty() && !files.contains(&path) {
+                files.push(path);
+            }
+        }
+    }
+    files
 }
