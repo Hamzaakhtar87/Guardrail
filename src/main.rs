@@ -159,29 +159,31 @@ fn main() {
     ).await;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // PHASE 3: The 10x Coding Syndicate — Mixture of Agents
+    // PHASE 3: The 10x Coding Syndicate — Multi-File Workspace
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     println!("╔══════════════════════════════════════════════════════════════╗");
-    println!("║     SYNDICATE — 10x Coding Engine (Mixture of Agents)       ║");
+    println!("║  SYNDICATE — 10x Coding Engine (Multi-File Workspace)      ║");
     println!("╚══════════════════════════════════════════════════════════════╝");
     println!();
-    println!("  Architect → Coder → Critic → Guardrail Sandbox → Output Verification");
-    println!("  Language: Rust | Task: SHA-256 from scratch");
+    println!("  Architect → Coder → Critic → cargo build → cargo run → Verify");
+    println!("  Language: Rust | Task: Multi-file HTTP server (std::net only)");
     println!();
 
-    let syndicate_task = "Implement a fully functional SHA-256 hashing algorithm from scratch \
-                          in pure Rust. Do NOT use any external crates. Implement all the \
-                          constants (K, H), message schedule, compression function, and \
-                          padding yourself. Hash the ASCII string \"hello world\" and print \
-                          the resulting 64-character lowercase hexadecimal digest. The correct \
-                          output is: b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9";
+    let syndicate_task = "Scaffold a basic Rust HTTP server project using ONLY the standard \
+                          library (no external web frameworks, just std::net). The project must \
+                          include: a Cargo.toml (with no external dependencies), a src/main.rs \
+                          that binds to 127.0.0.1:0 (OS-assigned port), accepts exactly ONE \
+                          incoming TCP connection, delegates it to a handler, prints the bound \
+                          port to stdout in the format 'Listening on port XXXX', prints \
+                          'Connection handled' after handling one request, then exits cleanly. \
+                          It must also include a src/handlers.rs module that contains a function \
+                          to write a valid HTTP 200 OK response with body 'Hello from Guardrail' \
+                          to the TcpStream. The main.rs must declare `mod handlers;` and use it.";
 
-    let expected_hash = "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9";
-
-    match syndicate::syndicate_coding_loop(syndicate_task, "rust", Some(expected_hash)).await {
+    match syndicate::syndicate_coding_loop(syndicate_task, "rust", Some("Connection handled")).await {
         Ok(output) => {
             println!("┌─────────────────────────────────────────────────────────────┐");
-            println!("│ SYNDICATE SUCCESS: SHA-256 verified by output comparison    │");
+            println!("│ SYNDICATE SUCCESS: Multi-file project built and verified    │");
             println!("└─────────────────────────────────────────────────────────────┘");
             println!("  Output: {}", output.trim());
         }
